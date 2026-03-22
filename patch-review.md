@@ -1,3 +1,8 @@
+---
+name: patch-review
+description: Download, apply, and review mailing list patches from lore.kernel.org or local commits. Use when the user asks to review a patch, review a mailing list submission, apply patches from lore, review a patch series, check a QEMU/Linux kernel patch, or analyze commit quality. Supports lore URLs, Message-Ids, local commits, and commit ranges as input.
+---
+
 # patch-review: Download, apply, and review mailing list patches
 
 ## Arguments

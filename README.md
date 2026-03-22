@@ -43,7 +43,7 @@ After installation, use the skill in Claude Code with:
 ./install.sh --codex
 ```
 
-This copies the skill to `~/.codex/skills/patch-review/SKILL.md`.
+This copies `patch-review.md` to `~/.codex/skills/patch-review/SKILL.md`.
 
 After installation, restart Codex and ask it to review a patch:
 
@@ -64,7 +64,7 @@ cp patch-review.md ~/.claude/commands/
 
 ```bash
 mkdir -p ~/.codex/skills/patch-review
-cp SKILL.md ~/.codex/skills/patch-review/
+cp patch-review.md ~/.codex/skills/patch-review/SKILL.md
 ```
 
 ### Uninstall
@@ -130,8 +130,7 @@ Review a single commit:
 
 ```
 patch-review/
-├── patch-review.md     # Claude Code command file
-├── SKILL.md            # Codex skill file
+├── patch-review.md     # Skill file (shared by Claude Code and Codex)
 ├── install.sh          # Installation script
 ├── LICENSE
 └── README.md
