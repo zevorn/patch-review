@@ -64,7 +64,7 @@ cp patch-review.md ~/.claude/commands/
 
 ```bash
 mkdir -p ~/.codex/skills/patch-review
-cp codex/SKILL.md ~/.codex/skills/patch-review/
+cp SKILL.md ~/.codex/skills/patch-review/
 ```
 
 ### Uninstall
@@ -131,8 +131,7 @@ Review a single commit:
 ```
 patch-review/
 ├── patch-review.md     # Claude Code command file
-├── codex/
-│   └── SKILL.md        # Codex skill file
+├── SKILL.md            # Codex skill file
 ├── install.sh          # Installation script
 ├── LICENSE
 └── README.md

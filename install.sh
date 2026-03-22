@@ -41,7 +41,7 @@ install_claude() {
 install_codex() {
     echo "Installing for Codex..."
     mkdir -p "${CODEX_SKILL_DIR}"
-    cp "${SCRIPT_DIR}/codex/SKILL.md" "${CODEX_SKILL_DIR}/SKILL.md"
+    cp "${SCRIPT_DIR}/SKILL.md" "${CODEX_SKILL_DIR}/SKILL.md"
     echo "  -> ${CODEX_SKILL_DIR}/SKILL.md"
     echo "Done. Restart Codex to pick up the new skill."
 }
