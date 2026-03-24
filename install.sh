@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# install.sh - Install patch-review skill for Claude Code and/or Codex
+# install.sh - Install patch-review for Claude Code and/or Codex
+#
+# Preferred: claude plugin add github:zevorn/patch-review
+# This script is for manual install or Codex-only environments.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_FILE="${SCRIPT_DIR}/commands/patch-review.md"
 
 CLAUDE_CMD_DIR="${HOME}/.claude/commands"
 CODEX_SKILL_DIR="${CODEX_HOME:-${HOME}/.codex}/skills/patch-review"
@@ -13,27 +17,24 @@ Usage: $0 [OPTIONS]
 
 Install patch-review skill for AI coding assistants.
 
+Preferred method for Claude Code:
+    claude plugin add github:zevorn/patch-review
+
 Options:
-    --claude        Install for Claude Code
+    --claude        Install for Claude Code (manual)
     --codex         Install for Codex
     --all           Install for all supported platforms
     --uninstall     Remove installed skill files
     -h, --help      Show this help
 
 If no option is given, installs for all platforms.
-
-Examples:
-    $0 --claude
-    $0 --codex
-    $0 --all
-    $0 --uninstall
 EOF
 }
 
 install_claude() {
-    echo "Installing for Claude Code..."
+    echo "Installing for Claude Code (manual)..."
     mkdir -p "${CLAUDE_CMD_DIR}"
-    cp "${SCRIPT_DIR}/patch-review.md" "${CLAUDE_CMD_DIR}/patch-review.md"
+    cp "${SKILL_FILE}" "${CLAUDE_CMD_DIR}/patch-review.md"
     echo "  -> ${CLAUDE_CMD_DIR}/patch-review.md"
     echo "Done. Restart Claude Code to pick up the new command."
 }
@@ -41,7 +42,7 @@ install_claude() {
 install_codex() {
     echo "Installing for Codex..."
     mkdir -p "${CODEX_SKILL_DIR}"
-    cp "${SCRIPT_DIR}/patch-review.md" "${CODEX_SKILL_DIR}/SKILL.md"
+    cp "${SKILL_FILE}" "${CODEX_SKILL_DIR}/SKILL.md"
     echo "  -> ${CODEX_SKILL_DIR}/SKILL.md"
     echo "Done. Restart Codex to pick up the new skill."
 }

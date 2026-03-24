@@ -1,0 +1,21 @@
+{
+  "name": "patch-review",
+  "description": "Download, apply, and review mailing list patches with dual-reviewer (Claude + Codex) cross-reference. Supports lore URLs, Message-Ids, subject search, local commits, and commit ranges.",
+  "version": "1.0.0",
+  "author": {
+    "name": "zevorn"
+  },
+  "repository": "https://github.com/zevorn/patch-review",
+  "homepage": "https://github.com/zevorn/patch-review#readme",
+  "license": "MIT",
+  "keywords": [
+    "patch-review",
+    "code-review",
+    "mailing-list",
+    "qemu",
+    "linux-kernel",
+    "lore",
+    "patchwork",
+    "codex"
+  ]
+}
