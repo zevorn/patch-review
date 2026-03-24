@@ -517,6 +517,40 @@ Keep total prefetched context reasonable:
 - For large files (>500 lines), focus on the sections relevant to the diff
 - Prioritize: modified files > header files > caller/callee files
 
+### Step 8.6: Launch parallel Codex review
+
+Before starting Claude's multi-stage review, launch a Codex code review in the
+background so both reviews run in parallel. This provides an independent second
+opinion from a different model.
+
+**Prerequisites check**: First verify `codex` is installed:
+```bash
+command -v codex &>/dev/null
+```
+
+If codex is **not** installed, skip this step entirely and proceed with
+Claude-only review. Print a note: "Codex not found, proceeding with Claude-only
+review."
+
+**Launch codex review in background**:
+```bash
+# Use Bash tool with run_in_background=true
+cd <repo_root>
+codex review --base <base_branch> \
+    -c "model=gpt-5.4" \
+    -c "review_model=gpt-5.4" \
+    -c "model_reasoning_effort=high" \
+    > /tmp/qemu-review-<timestamp>/codex-review.log 2>&1
+```
+
+Where `<base_branch>` is:
+- For modes `lore`, `msgid`: the base branch (default: `master`)
+- For mode `commit`: the base branch
+- For mode `range`: the `<base>` ref from the range
+
+The codex review runs in background while Claude proceeds with Step 9. Its
+output will be collected in Step 9.5.
+
 ### Step 9: Multi-stage code review protocol
 
 **IMPORTANT**: Instead of a single monolithic review pass, perform the review
@@ -620,6 +654,53 @@ git format-patch <base_branch>..HEAD -o /tmp/qemu-review-<timestamp>/checkpatch/
 ./scripts/checkpatch.pl /tmp/qemu-review-<timestamp>/checkpatch/*.patch
 ```
 
+### Step 9.5: Collect and cross-reference Codex review
+
+If Codex review was launched in Step 8.6, collect its results now.
+
+#### 9.5a: Read Codex output
+
+Read the codex review log file:
+```
+/tmp/qemu-review-<timestamp>/codex-review.log
+```
+
+If the background command has not finished yet, wait for it to complete (it was
+launched with `run_in_background`).
+
+If codex exited with non-zero or produced empty output, note the failure and
+proceed with Claude-only findings. Do not block the review.
+
+#### 9.5b: Parse Codex findings
+
+Codex review outputs issues with `[P0-9]` severity markers:
+```
+- [P0] Critical issue description - /path/to/file.c:line-range
+  Detailed explanation.
+- [P1] High priority issue - /path/to/file.c:line-range
+  Detailed explanation.
+```
+
+Extract all findings with their severity, file path, line range, and
+description.
+
+#### 9.5c: Cross-reference with Claude findings
+
+Compare Codex findings against Claude's findings from Stages A–E:
+
+1. **Both agree** (`[Claude+Codex]`): Same issue found by both reviewers.
+   Match by file + line range + issue category. These have highest confidence.
+2. **Claude only** (`[Claude]`): Found by Claude but not by Codex. Present
+   as normal.
+3. **Codex only** (`[Codex]`): Found by Codex but not by Claude. Claude MUST
+   verify each Codex-only finding before including it:
+   - Read the relevant code and trace the execution path
+   - If the finding is valid, include it with `[Codex]` attribution
+   - If the finding is a false positive, discard it with a brief note in
+     the internal cross-reference log
+
+Record the cross-reference results for use in Steps 10 and 11.
+
 ### Step 10: Summary
 
 Provide structured review with severity breakdown:
@@ -627,16 +708,25 @@ Provide structured review with severity breakdown:
 1. **Series overview**: title, author, patch count
 2. **Patchwork context**: review status, existing feedback from other
    reviewers, CI results, and version evolution (from Step 7)
-3. **Findings by severity**:
+3. **Findings by severity** (with source attribution):
    - Critical issues (must fix before merge)
    - Major issues (should fix)
    - Minor issues (consider fixing)
    - Nits (optional cleanup)
+   Each finding is tagged with its source:
+   - `[Claude+Codex]` — found by both (highest confidence)
+   - `[Claude]` — found by Claude only
+   - `[Codex]` — found by Codex only (verified by Claude)
 4. **Per-patch breakdown**: map findings to specific patches
 5. **checkpatch results**
-6. **Overall assessment**:
+6. **Codex review summary** (if codex was available):
+   - Codex model and configuration used
+   - Number of findings: total, agreed with Claude, unique to Codex
+   - Codex findings that were dismissed as false positives (with reason)
+7. **Overall assessment**:
    - Ready to merge / Needs revision / Has blockers
-   - Confidence level in the review (based on how much context was available)
+   - Confidence level in the review (based on how much context was available,
+     and whether dual-reviewer cross-reference was performed)
    - Key risks or areas that need domain expert input
 
 ### Step 11: Generate inline review reply
@@ -655,6 +745,12 @@ Rules:
 - Only quote the lines that are relevant to a comment; use `[...]` to skip
   unrelated hunks.
 - If a section has no issues, either skip it or add a brief positive note.
+- **Source attribution**: When Codex review was available, tag each review
+  comment with its source. Use a subtle inline tag at the start of the comment:
+  - `[Claude+Codex]` — both reviewers found this issue (highest confidence)
+  - `[Codex]` — originally found by Codex, verified by Claude
+  - No tag needed for Claude-only findings (default reviewer)
+  This attribution helps the patch author gauge confidence level.
 - **CRITICAL - Line Width Limit**: English review comments MUST follow mailing
   list conventions:
   - Target 75 characters per line (recommended)
@@ -712,21 +808,34 @@ On <date>, <author> wrote:
 > <diff hunk context>
 > +    problematic_code();
 
-Review comment explaining the issue, with suggested fix if applicable.
+[Claude+Codex] Review comment explaining the issue found by both
+reviewers, with suggested fix if applicable.
 
-中文翻译。
+[Claude+Codex] 中文翻译。
 
 > <more diff context>
 [...]
 > +    another_section();
 
-Another comment.
+Another comment (Claude-only findings need no tag).
 
 中文翻译。
+
+> +    yet_another_line();
+
+[Codex] Issue originally found by Codex review, verified valid
+by Claude. Explanation here.
+
+[Codex] 中文翻译。
 
 Best regards,
 Chao Liu
 ` ` `
 ```
+
+**Note on Codex unavailability**: If Codex was not available (not installed or
+failed), omit all source attribution tags and produce the reply in the original
+format. Add a brief note at the end of the review file:
+`Note: This review was performed by Claude only (Codex unavailable).`
 
 File naming: `~/qemu-patch/reply/<series-short-name>-<version>-reply.md`
