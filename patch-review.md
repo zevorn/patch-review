@@ -1,6 +1,6 @@
 ---
 name: patch-review
-description: Download, apply, and review mailing list patches from lore.kernel.org or local commits. Use when the user asks to review a patch, review a mailing list submission, apply patches from lore, review a patch series, check a QEMU/Linux kernel patch, or analyze commit quality. Supports lore URLs, Message-Ids, local commits, and commit ranges as input.
+description: Download, apply, and review mailing list patches from lore.kernel.org or local commits. Use when the user asks to review a patch, review a mailing list submission, apply patches from lore, review a patch series, check a QEMU/Linux kernel patch, or analyze commit quality. Supports lore URLs, Message-Ids, subject keyword search, local commits, and commit ranges as input.
 ---
 
 # patch-review: Download, apply, and review mailing list patches
@@ -14,6 +14,8 @@ Format: `<source> [base_branch]`
 - `source` (required): One of the following input forms:
   - **lore URL**: `https://lore.kernel.org/qemu-devel/<msgid>/t.mbox.gz`
   - **Message-Id**: `<msgid@domain>` or bare `msgid@domain`
+  - **Subject search**: Keywords from patch subject (e.g., `virtio-net fix`,
+    `riscv vector`). Triggers interactive search on Patchwork and lore.
   - **Local commit**: A single git SHA or ref (e.g., `HEAD`, `abc1234`)
   - **Local commit range**: `<base>..<tip>` (e.g., `master..HEAD`,
     `abc1234..def5678`)
@@ -38,12 +40,94 @@ Detect the input mode:
 3. **Local commit range**: Contains `..` (e.g., `master..HEAD`). Split into
    base and tip refs.
 4. **Local commit**: A single SHA or ref. Verify with `git rev-parse <ref>`.
+   If `git rev-parse` fails, this is NOT a local commit — fall through to
+   mode 5.
+5. **Subject search**: Any input that does not match modes 1–4. Treat the
+   entire source string as search keywords.
 
 If no arguments provided, ask the user for the source.
 
-Set `$INPUT_MODE` to one of: `lore`, `msgid`, `commit`, `range`.
+Set `$INPUT_MODE` to one of: `lore`, `msgid`, `range`, `commit`, `search`.
 For modes `lore` and `msgid`, proceed to Step 2 (remote fetch).
 For modes `commit` and `range`, skip to Step 2b (local export).
+For mode `search`, proceed to Step 1.5 (subject search).
+
+### Step 1.5: Subject search (mode: `search`)
+
+Search for patches by subject keywords on Patchwork and lore, present results
+to the user, and extract the Message-Id for the selected patch.
+
+#### 1.5a: Search Patchwork API
+
+Query the Patchwork REST API with the keywords:
+
+```
+WebFetch: https://patchwork.ozlabs.org/api/patches/?project=qemu-devel&q=<keywords>&order=-date&per_page=20
+```
+
+URL-encode the keywords (spaces → `%20` or `+`).
+
+From the JSON response, extract for each result:
+- `name` — patch subject line
+- `msgid` — Message-Id
+- `date` — submission date
+- `submitter.name` — author name
+- `state` — patch status (New / Under Review / Accepted / …)
+- `series[0].name` — series name (if part of a series)
+- `series[0].id` — series ID
+
+#### 1.5b: Fallback — search lore
+
+If Patchwork returns no results or is unreachable, fall back to lore search:
+
+```
+WebFetch: https://lore.kernel.org/qemu-devel/?q=<keywords>&x=A
+```
+
+Parse the HTML response to extract matching threads:
+- Subject lines
+- Message-Ids (from `href` attributes linking to messages)
+- Dates and authors
+
+#### 1.5c: Present results to user
+
+Display the search results as a numbered list:
+
+```
+Search results for "<keywords>":
+
+  #  | Date       | Subject                                    | Author         | Status
+  ---+------------+--------------------------------------------+----------------+-----------
+  1  | 2026-03-20 | [PATCH v3 0/5] virtio-net: Fix RSC ...     | Alice Smith    | Under Review
+  2  | 2026-03-18 | [PATCH v2 0/5] virtio-net: Fix RSC ...     | Alice Smith    | Superseded
+  3  | 2026-03-15 | [PATCH 1/2] virtio-net: Add feature X      | Bob Jones      | New
+  ...
+```
+
+If results span multiple series, group by series where possible (use
+`series[0].id` to group). Show the cover letter (`0/N`) entry when available,
+otherwise show the first patch of the series.
+
+#### 1.5d: User selection
+
+Ask the user to select one result by number. If the user wants to refine the
+search, allow them to provide new keywords and repeat from 1.5a.
+
+#### 1.5e: Extract Message-Id and continue
+
+From the selected result, extract the `msgid` field. Set `$INPUT_MODE` to
+`msgid` and proceed to Step 2 (remote fetch) with this Message-Id.
+
+If the selected result is part of a series (has `series[0].id`), prefer to
+use the cover letter's Message-Id so that b4 fetches the entire series. Query
+the series endpoint to find the cover letter:
+
+```
+WebFetch: https://patchwork.ozlabs.org/api/series/<series_id>/
+```
+
+Extract `cover_letter.msgid` from the response. If available, use it as the
+Message-Id; otherwise fall back to the selected patch's `msgid`.
 
 ### Step 2: Download patches with b4 (modes: `lore`, `msgid`)
 
