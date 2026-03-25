@@ -9,7 +9,7 @@ description: Download, apply, and review mailing list patches from lore.kernel.o
 
 $ARGUMENTS
 
-Format: `<source> [base_branch]`
+Format: `<source> [base_branch] [+zh]`
 
 - `source` (required): One of the following input forms:
   - **lore URL**: `https://lore.kernel.org/qemu-devel/<msgid>/t.mbox.gz`
@@ -21,6 +21,9 @@ Format: `<source> [base_branch]`
     `abc1234..def5678`)
 - `base_branch` (optional): Branch to base on. Default: `master`.
   Ignored when source is a local commit range (base is derived from range).
+- `+zh` (optional): Include Chinese analysis section in the review file.
+  Default: off (English-only output). When present, a `## 中文分析` section
+  is added to the review file header with bullet-point findings in Chinese.
 
 ## Workflow
 
@@ -331,11 +334,11 @@ Present to the user:
    - Related patch series or issues mentioned
    - Links to relevant documentation or specifications
 
-**Format**: Present this as a clear, concise summary in Chinese, allowing the
-user to understand the patch's intent before proceeding with detailed review.
+**Format**: If `+zh` flag is set, present in Chinese. Otherwise present in
+English. Keep it concise — a few bullet points, not paragraphs.
 
-After presenting the summary, ask the user if they want to proceed with the
-detailed code review, or if they have any questions about the patch intent.
+After presenting the summary, proceed directly to code review (do NOT ask
+the user for permission to continue).
 
 ### Step 7: Patchwork & mailing list context collection
 
@@ -445,8 +448,8 @@ steps:
 4. **Subsystem activity**: related recent patches, potential conflicts, new
    patterns to follow
 
-Present this summary to the user in Chinese before proceeding to Git history
-analysis.
+Present this summary briefly (use Chinese if `+zh`, otherwise English)
+before proceeding to Git history analysis.
 
 ### Step 8: Git history analysis
 
@@ -703,139 +706,214 @@ Record the cross-reference results for use in Steps 10 and 11.
 
 ### Step 10: Summary
 
-Provide structured review with severity breakdown:
+Present the **`## Summary`** section content (as defined in Step 11a) to the
+user in the conversation. This is the same content that will go into the
+review file header — no need to produce it twice.
 
-1. **Series overview**: title, author, patch count
-2. **Patchwork context**: review status, existing feedback from other
-   reviewers, CI results, and version evolution (from Step 7)
-3. **Findings by severity** (with source attribution):
-   - Critical issues (must fix before merge)
-   - Major issues (should fix)
-   - Minor issues (consider fixing)
-   - Nits (optional cleanup)
-   Each finding is tagged with its source:
-   - `[Claude+Codex]` — found by both (highest confidence)
-   - `[Claude]` — found by Claude only
-   - `[Codex]` — found by Codex only (verified by Claude)
-4. **Per-patch breakdown**: map findings to specific patches
-5. **checkpatch results**
-6. **Codex review summary** (if codex was available):
-   - Codex model and configuration used
-   - Number of findings: total, agreed with Claude, unique to Codex
-   - Codex findings that were dismissed as false positives (with reason)
-7. **Overall assessment**:
-   - Ready to merge / Needs revision / Has blockers
-   - Confidence level in the review (based on how much context was available,
-     and whether dual-reviewer cross-reference was performed)
-   - Key risks or areas that need domain expert input
+The summary covers: verdict, version history, patchwork/ML context, findings
+table, and checkpatch. See Step 11a for the exact format.
+
+If Codex was available, tag findings: `[C+X]` both, `[X]` codex-only.
+Keep the entire summary under 40 lines.
 
 ### Step 11: Generate inline review reply
 
-Generate a review reply file in standard mailing list inline review format and
-save it to `~/qemu-patch/reply/`. This is the universal convention for all
-mailing-list-based open source projects (QEMU, Linux kernel, etc.).
+Generate a review reply file saved to `~/qemu-patch/reply/`.
 
-Rules:
-- One reply file per series, covering all patches.
-- For each patch, start with the standard `On <date>, <author> wrote:` header.
-- Quote the original patch content with `> ` prefix (commit message, diffstat,
-  and diff hunks).
-- Place review comments **directly below** the relevant quoted code block, not
-  in a separate section. This is the key difference from a standalone summary.
-- Only quote the lines that are relevant to a comment; use `[...]` to skip
-  unrelated hunks.
-- If a section has no issues, either skip it or add a brief positive note.
-- **Source attribution**: When Codex review was available, tag each review
-  comment with its source. Use a subtle inline tag at the start of the comment:
-  - `[Claude+Codex]` — both reviewers found this issue (highest confidence)
-  - `[Codex]` — originally found by Codex, verified by Claude
-  - No tag needed for Claude-only findings (default reviewer)
-  This attribution helps the patch author gauge confidence level.
-- **CRITICAL - Line Width Limit**: English review comments MUST follow mailing
-  list conventions:
-  - Target 75 characters per line (recommended)
-  - NEVER exceed 80 characters per line (hard limit)
-  - Break long sentences into multiple lines
-  - Use natural line breaks at punctuation or logical boundaries
-  - Code snippets and quoted patches are exempt from this limit
-  - Chinese translations are exempt from this limit
-- **CRITICAL - English Style**: Write review comments in simple, clear, and direct
-  English. Use natural, conversational language common in technical communities.
-  Prefer short sentences and everyday words over complex or overly formal expressions.
-  Use technical slang and idioms when appropriate (e.g., "this breaks", "bloats the
-  binary", "looks good", "nit:", "LGTM"). Avoid academic or bureaucratic phrasing.
-  Write like a fellow developer, not a formal document.
-- **CRITICAL - Tone and Voice**:
-  - Avoid first-person subjects ("I think", "I noticed"). Use impersonal
-    constructions instead: "there seems to be...", "it looks like...",
-    "this might need...", "worth checking whether...".
-  - **For minor issues** (nits, style, suggestions): be inclusive and
-    humble. Use "might", "seems", "could". Leave room for the author
-    to explain their intent.
-  - **For real bugs** (logic errors, correctness issues, spec violations):
-    be direct and assertive. Use "should", "is wrong", "this breaks".
-    Do NOT soften actual bugs -- clarity prevents confusion.
-  - Stay concise -- no filler, no hedging beyond a single softener.
-  - Examples (minor):
-    - BAD:  "I suggest changing this to X."
-    - GOOD: "It might be worth changing this to X."
-  - Examples (bug):
-    - BAD:  "There might be a possible issue with the NaN value."
-    - GOOD: "This is wrong -- 0x7e00 is not a NaN in BF16, it should
-             be 0x7fc0."
-- **CRITICAL - Chinese Translation**: Each English comment MUST be followed by its
-  Chinese translation. The Chinese translation must be a **direct, one-to-one
-  translation** of the English text, preserving all technical details, suggestions,
-  and tone. Do NOT summarize, paraphrase, or add extra information in Chinese.
-  Translate sentence by sentence to maintain accuracy.
+File naming: `~/qemu-patch/reply/<series-short-name>-<version>-reply.md`
+
+#### 11a: File structure
+
+The file always starts with an **English executive summary** (outside code
+blocks, for the reviewer's own reference), followed by **English reply code
+blocks** (ready to paste to the mailing list). A Chinese section is appended
+only when `+zh` is passed.
+
+```markdown
+# Review: [PATCH vN 0/M] <title>
+<!-- metadata: author, date, msgid, patchwork ID, base -->
+
+## Summary
+
+**Verdict**: Needs revision / Ready to merge / Blocked
+**Author**: <name>, **Patches**: <N>, **Base**: <branch>
+
+### Version history
+| Ver | Date | # | Key change |
+|-----|------|---|------------|
+| v1  | ... | 8 | Initial post |
+| v2  | ... | 5 | Dropped foo per reviewer X |
+| vN  | ... | 7 | Current — added tests |
+
+### Patchwork & ML context
+- **State**: new / under review / accepted
+- **R-b tags**: <who> on <which patches>
+- **CI**: pass / fail / pending
+- **Prior feedback**: <1-2 bullet points of key unresolved
+  concerns from earlier versions>
+- **Maintainer activity**: <queued? / silent? / asked for changes?>
+
+### Findings (<N>C / <N>M / <N>m / <N>n)
+| # | Sev | Patch | Issue (one line) |
+|---|-----|-------|------------------|
+| 1 | C   | 2/7   | ... |
+...
+
+### checkpatch
+<clean / list issues>
+
+## 中文分析              ← only if +zh flag is set
+<!-- Same content as Summary, translated to Chinese. -->
+
+---
+
+## Reply to [PATCH vN 0/M] cover letter
+` ` `
+<English inline reply — ready to send>
+` ` `
+
+## Reply to [PATCH vN 1/M] <subject>
+` ` `
+<English inline reply>
+` ` `
+...
+```
+
+Key rules:
+- The `## Summary` section is **always present** (English).
+- The `## 中文分析` section is **only included when `+zh` is in the
+  arguments**.
+- Everything inside fenced code blocks (the replies) is **always pure
+  English, mailing-list ready**.
+- The Summary section should be **≤40 lines** total. Version history
+  and findings tables are the core — skip subsections that add no info
+  (e.g., skip "Version history" for v1 patches).
+
+#### 11b: Mailing list vocabulary — use freely
+
+| Shorthand | Meaning |
+|-----------|---------|
+| LGTM | Looks Good To Me |
+| nit: | Nitpick (trivial style issue) |
+| s/foo/bar/ | Replace "foo" with "bar" |
+| FWIW | For What It's Worth |
+| IIUC | If I Understand Correctly |
+| AFAICT | As Far As I Can Tell |
+| IOW | In Other Words |
+| WRT | With Regard To |
+| FYI | For Your Information |
+| NB | Nota Bene (important note) |
+| w/ / w/o | with / without |
+| OOB | Out Of Bounds |
+| UAF | Use After Free |
+| DTRT | Do The Right Thing |
+| IWBN | It Would Be Nice |
+| R-b: / A-b: / T-b: | Reviewed-by / Acked-by / Tested-by |
+| NAK | Negative Acknowledgment (reject) |
+
+Also use conventions like:
+- `Reviewed-by: Chao Liu <chao.liu.zevorn@gmail.com>` for clean patches
+- Bare `LGTM.` when a patch is obviously correct
+- `s/ELFDATA2LSB/info->is_big_endian ? ELFDATA2MSB : ELFDATA2LSB/`
+  instead of "please change ELFDATA2LSB to a conditional expression"
+
+#### 11c: Brevity rules — CRITICAL
+
+**Write like a seasoned kernel reviewer, not a tutorial.**
+
+1. **One-liners for nits**: `nit: s/foo/bar/` — done.
+2. **2-3 lines for bugs**: state the bug, cite the spec/code, suggest fix.
+3. **Skip clean patches** entirely, or just: `LGTM.` / give R-b.
+4. **Skip clean hunks** — don't quote code just to say "looks good".
+   Use `[...]` liberally.
+5. **Don't re-explain** the code being reviewed — the author wrote it.
+6. **Don't repeat** the commit message description.
+7. **Don't pad** with "Thanks for this patch", "This is a nice
+   improvement", etc. Get to the point.
+8. **Cover letter reply**: one short paragraph of overall impression,
+   then bullet-list the blockers. Nothing else.
+9. **Max lengths**:
+   - Cover letter reply: ≤10 lines
+   - Per-patch reply: ≤15 lines (excluding quoted context)
+   - Individual comment: ≤3 lines (unless explaining a complex bug)
+10. **If nothing to say about a patch, omit its section entirely.**
+
+Anti-patterns (NEVER do these):
+- ❌ "The split between instruction entries (0-5, always LE) and data
+      entries (6-9, endianness-dependent) is correct and well-commented."
+  → Just skip it. Clean code doesn't need praise.
+- ❌ "The firmware dynamic info encoding looks correct. OpenSBI will
+      need matching big-endian support to consume this."
+  → Skip. The author knows their downstream.
+- ❌ "Good — cpu_synchronize_state() ensures mstatus is current when
+      running under KVM."
+  → Skip. Restating obvious correct code is noise.
+- ❌ Quoting 10 lines of diff just to say "LGTM"
+  → Don't quote code you have no comment on.
+
+Good patterns:
+- ✅ `nit: s/.virtio_is_big_endian/.internal_is_big_endian/ in subject`
+- ✅ `This won't compile — MSTATUS_SBE is undefined. Restore the
+      #define from v4 patch 1.`
+- ✅ `Per priv spec §3.1.6.1, endianness w/ MPRV=1 should use MPP,
+      not env->priv. Masked today since all bits are identical, but
+      worth fixing now.`
+- ✅ `ELFDATA2LSB is still hardcoded — BE ELFs will be rejected.
+      s/ELFDATA2LSB/info->is_big_endian ? ELFDATA2MSB : ELFDATA2LSB/`
+
+#### 11d: Formatting rules
+
+- Line width: target 72 chars, hard limit 78 (excluding quoted lines).
+- `On <date>, <author> wrote:` header for each patch.
+- Quote with `> ` prefix. Use `[...]` to skip irrelevant hunks.
+- Place comments directly below the relevant quoted line(s).
 - End each per-patch reply with `Thanks,\nChao Liu`.
-- Wrap the entire reply body in a markdown fenced code block (` ``` `) so it
-  preserves the `> ` quoting when rendered.
+- Wrap reply body in markdown fenced code block (` ``` `).
 
-Example structure:
+#### 11e: Codex attribution
+
+When Codex was available, prefix cross-referenced comments:
+- `[C+X]` — both found it
+- `[X]` — codex-only, verified by Claude
+- No tag for Claude-only (default)
+
+If Codex unavailable, omit tags. Add at file end:
+`Note: Claude-only review (Codex unavailable).`
+
+#### 11f: Example
 
 ```
-## Reply to [PATCH n/m] <subject>
+## Reply to [PATCH v5 3/7] target/riscv: Implement runtime data endianness
 
 ` ` `
-On <date>, <author> wrote:
-> <commit message>
->
-> Signed-off-by: ...
-> ---
-> <diffstat>
->
-> <diff hunk context>
-> +    problematic_code();
+On Tue, 24 Mar 2026 16:40:16 +0000, Djordje Todorovic wrote:
+> - Update mo_endian_env() in op_helper.c to call the
+>   new helper
 
-[Claude+Codex] Review comment explaining the issue found by both
-reviewers, with suggested fix if applicable.
+Commit message says op_helper.c is updated, but the
+diff doesn't touch it. Stale description from rebase?
 
-[Claude+Codex] 中文翻译。
-
-> <more diff context>
 [...]
-> +    another_section();
+> +static inline MemOp mo_endian_env(CPURISCVState *env)
+> +{
+> +    return riscv_cpu_data_is_big_endian(env)
+>            ? MO_BE : MO_LE;
+> +}
 
-Another comment (Claude-only findings need no tag).
+Build failure: op_helper.c:32 already defines
+mo_endian_env() (returns MO_TE), and it #includes
+internals.h. Drop the op_helper.c copy.
 
-中文翻译。
+[...]
+> +    switch (env->priv) {
+> +    case PRV_M:
+> +        return env->mstatus & MSTATUS_MBE;
 
-> +    yet_another_line();
+Per priv spec §3.1.6.1, when MPRV=1 endianness
+should follow MPP, not current priv. Masked today
+(all bits identical at reset) but worth fixing.
 
-[Codex] Issue originally found by Codex review, verified valid
-by Claude. Explanation here.
-
-[Codex] 中文翻译。
-
-Best regards,
+Thanks,
 Chao Liu
 ` ` `
 ```
-
-**Note on Codex unavailability**: If Codex was not available (not installed or
-failed), omit all source attribution tags and produce the reply in the original
-format. Add a brief note at the end of the review file:
-`Note: This review was performed by Claude only (Codex unavailable).`
-
-File naming: `~/qemu-patch/reply/<series-short-name>-<version>-reply.md`
